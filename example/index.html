@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Keyframe example</title>
+<link rel="stylesheet" href="../core/shared.css">
+<style>
+  :root { --ink: #0a1730; --line: #e8f1ff; --accent: #4fd8ff;
+    --cap-font: 'Segoe UI Variable Text', 'Segoe UI'; --cap-size: 38px; --cap-weight: 600; --cap-bg: rgba(4, 10, 24, .82); --cap-radius: 8px; }
+  #stage { background: radial-gradient(120% 90% at 50% 40%, #12264a, var(--ink) 70%); color: var(--line); font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; }
+  .title { position: absolute; left: 0; width: 1920px; text-align: center; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+  .chip { position: absolute; padding: 18px 36px; border-radius: 999px; border: 2px solid var(--accent); color: #fff; font: 600 52px/1 'Segoe UI Variable Display', 'Segoe UI'; white-space: nowrap; }
+  .step { position: absolute; width: 360px; text-align: center; font: 600 40px/1.2 'Segoe UI Variable Display', 'Segoe UI'; }
+  svg.fill { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: visible; }
+  .rim { fill: rgba(10, 23, 48, .6); stroke: var(--line); stroke-width: 2; }
+  .grat { fill: none; stroke: rgba(232, 241, 255, .14); stroke-width: 1; }
+  .land { fill: rgba(79, 216, 255, .10); stroke: var(--line); stroke-width: 1.4; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="world"></div></div>
+<script src="../takes/example/data.js"></script>
+<script src="../core/engine.js"></script>
+<script src="bundle.js"></script>
+</body>
+</html>

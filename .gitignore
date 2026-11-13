@@ -1,0 +1,7 @@
+node_modules/
+out/
+takes/
+**/bundle.js
+*.log
+__pycache__/
+*.pyc

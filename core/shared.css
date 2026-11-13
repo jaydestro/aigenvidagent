@@ -1,0 +1,70 @@
+@import url('../node_modules/@fontsource/hanken-grotesk/400.css');
+@import url('../node_modules/@fontsource/hanken-grotesk/500.css');
+@import url('../node_modules/@fontsource/hanken-grotesk/600.css');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+#stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; }
+.abs { position: absolute; }
+.fill { position: absolute; inset: 0; }
+.scene { position: absolute; inset: 0; }
+img { display: block; }
+
+/* ---------- captions (versions override the CSS vars) ---------- */
+#cap {
+  position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%);
+  max-width: 1560px; z-index: 100; text-align: center; pointer-events: none;
+}
+#cap span {
+  display: inline-block; max-width: 1560px; padding: var(--cap-pad, 14px 30px 16px);
+  font: var(--cap-weight, 500) var(--cap-size, 40px)/1.32 var(--cap-font, 'Segoe UI Variable Text', 'Segoe UI', sans-serif);
+  color: var(--cap-ink, #fff); background: var(--cap-bg, rgba(4, 8, 18, 0.74));
+  border-radius: var(--cap-radius, 12px); letter-spacing: var(--cap-track, 0);
+  text-wrap: balance; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+#cap span:empty { display: none; }
+
+/* ---------- faithful ChatGPT web UI recreation (dark), based on chatgpt.com capture ---------- */
+.gpt { position: absolute; width: 1600px; height: 1000px; background: #000; color: #fff; overflow: hidden;
+  font-family: 'Hanken Grotesk', 'Segoe UI', sans-serif; border-radius: 14px; }
+.gpt .side { position: absolute; left: 0; top: 0; bottom: 0; width: 260px; border-right: 1px solid #262626; padding: 18px 14px; }
+.gpt .brand { font-weight: 600; font-size: 19px; display: flex; align-items: center; gap: 6px; padding: 4px 4px 22px; letter-spacing: -0.01em; }
+.gpt .brand svg { width: 14px; height: 14px; opacity: .8 }
+.gpt .nav { display: flex; align-items: center; gap: 12px; font-size: 16px; padding: 9px 4px; color: #ececec; }
+.gpt .nav svg { width: 20px; height: 20px; flex: none }
+.gpt .main { position: absolute; left: 260px; right: 0; top: 0; bottom: 0; }
+.gpt .top { position: absolute; right: 18px; top: 10px; display: flex; gap: 10px; }
+.gpt .pill { height: 42px; padding: 0 18px; border-radius: 21px; font: 500 16px/42px 'Hanken Grotesk'; }
+.gpt .pill.w { background: #fff; color: #0d0d0d; }
+.gpt .pill.d { border: 1px solid #3a3a3a; color: #fff; }
+.gpt .thread { position: absolute; left: 50%; transform: translateX(-50%); top: 120px; width: 760px; }
+.gpt .ubub { margin-left: auto; width: fit-content; max-width: 70%; background: #303030; border-radius: 22px; padding: 12px 20px; font-size: 19px; line-height: 1.5; }
+.gpt .asst { margin-top: 34px; font-size: 19px; line-height: 1.65; color: #ececec; min-height: 64px; }
+.gpt .asst .sw { display: inline; }
+.gpt .hello { position: absolute; left: 50%; top: 385px; transform: translateX(-50%); font-size: 30px; font-weight: 500; white-space: nowrap; }
+.gpt .composer { position: absolute; left: 50%; transform: translateX(-50%); width: 768px; height: 60px; border-radius: 30px;
+  background: #262626; border: 1px solid #3a3a3a; display: flex; align-items: center; padding: 0 10px 0 18px; gap: 14px; }
+.gpt .composer .txt { flex: 1; font-size: 19px; color: #fff; white-space: nowrap; overflow: hidden; }
+.gpt .composer .txt.placeholder { color: #afafaf; }
+.gpt .composer .txt.typing::after { content: ''; display: inline-block; width: 2px; height: 22px; background: #fff; margin-left: 2px; vertical-align: -4px; }
+.gpt .composer svg { width: 22px; height: 22px; flex: none }
+.gpt .send { width: 40px; height: 40px; border-radius: 50%; background: #2f6bff; display: grid; place-items: center; }
+.gpt .send.up { background: #fff; }
+.gpt .foot { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 13px; color: #b4b4b4; white-space: nowrap; }
+
+/* ---------- live code editor (versions theme it via the --ed-* vars) ---------- */
+.ed { position: absolute; width: 1040px; border-radius: var(--ed-radius, 12px); overflow: hidden; background: var(--ed-bg, #0d1117);
+  border: 1px solid var(--ed-border, rgba(255,255,255,.1)); box-shadow: var(--ed-shadow, 0 30px 70px rgba(0,0,0,.5)); color: var(--ed-ink, #d4dae3); }
+.ed-tb { height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 18px; border-bottom: 1px solid var(--ed-border, rgba(255,255,255,.08));
+  font: 500 19px/1 var(--ed-ui, 'Segoe UI Variable Text', 'Segoe UI', sans-serif); color: var(--ed-dim, #8b949e); }
+.ed-tb i { width: 12px; height: 12px; border-radius: 6px; background: var(--ed-border, rgba(255,255,255,.18)); }
+.ed-tb span { margin-left: 14px; }
+.ed-code { padding: 22px 0; font: 400 27px/1.78 var(--ed-mono, 'IBM Plex Mono', Consolas, monospace); white-space: pre; }
+.ed-code > div { padding: 0 28px; }
+.ed-code .ln { display: inline-block; width: 46px; color: var(--ed-dim, #586069); }
+.ed-code .hl { background: var(--ed-hl, rgba(79,227,255,.14)); color: var(--ed-hl-ink, #fff);
+  box-shadow: inset 4px 0 0 var(--ed-accent, #4fe3ff); filter: brightness(calc(1 + var(--flash, 0) * .6)); }
+.ed-agent { display: flex; align-items: center; gap: 12px; padding: 14px 28px 18px; border-top: 1px solid var(--ed-border, rgba(255,255,255,.08));
+  font: 500 22px/1 var(--ed-ui, 'Segoe UI Variable Text', 'Segoe UI', sans-serif); color: var(--ed-dim, #8b949e); }
+.ed-agent b { width: 12px; height: 12px; border-radius: 6px; background: var(--ed-accent, #4fe3ff); }
+.ed-agent em { margin-left: auto; font-style: normal; color: var(--ed-accent, #4fe3ff); font-variant-numeric: tabular-nums; }

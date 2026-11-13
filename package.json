@@ -1,0 +1,19 @@
+{
+  "name": "keyframe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Keyframe: an AI agent and toolkit for producing high-profile narrated videos as code",
+  "scripts": {
+    "build": "esbuild %npm_config_project%/main.js --bundle --format=iife --outfile=%npm_config_project%/bundle.js"
+  },
+  "dependencies": {
+    "@fontsource/hanken-grotesk": "^5.3.0",
+    "d3-geo": "^3.1.1",
+    "three": "^0.170.0",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
