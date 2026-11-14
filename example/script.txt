@@ -1,5 +1,5 @@
 Every great launch starts with a clear story, told in under a minute.
 
-Keyframe turns your script into a narrated, captioned film, frame by frame, with every visual landing on the spoken word.
+aigenvidagent turns your script into a narrated, captioned film, frame by frame, with every visual landing on the spoken word.
 
 Lock the words, shape the visuals, and ship with confidence.

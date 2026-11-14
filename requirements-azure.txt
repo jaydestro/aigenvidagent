@@ -1,0 +1,3 @@
+# Optional: legacy make_take.py live synthesis and stt_check.py only.
+# REST voice auditions do not require this SDK.
+azure-cognitiveservices-speech==1.47.0

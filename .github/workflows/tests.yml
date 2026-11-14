@@ -1,0 +1,67 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-validation:
+    name: Local workflow (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    env:
+      AIGENVIDAGENT_RUN_CAPTURE_INTEGRATION: '1'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-render.txt
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Install Chromium and Linux browser dependencies
+        if: runner.os == 'Linux'
+        run: python -m playwright install --with-deps chromium
+      - name: Install Chromium
+        if: runner.os != 'Linux'
+        run: python -m playwright install chromium
+      - name: Install ffmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install ffmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Check media tools
+        run: |
+          ffmpeg -version
+          ffprobe -version
+      - name: Python tests and offline browser integration (no cloud credentials)
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Node unit tests
+        run: npm test
+      - name: Build example
+        run: npm run build -- example

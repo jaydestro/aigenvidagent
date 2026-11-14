@@ -4,7 +4,17 @@
   const tracks = new Map(); // element -> [{t0,t1,from,to,ease}]
   const hooks = [];
   const scenes = [];
-  E.W = 1920; E.H = 1080; E.DUR = (window.META && window.META.duration) || 90;
+  const renderConfig = window.AIGENVIDAGENT_RENDER || {};
+  E.W = renderConfig.width || 1920; E.H = renderConfig.height || 1080;
+  E.DUR = renderConfig.duration ?? (window.META && window.META.duration) ?? 90;
+  const stage = document.getElementById('stage');
+  const scale = Math.min(E.W / 1920, E.H / 1080);
+  document.documentElement.style.setProperty('--render-width', `${E.W}px`);
+  document.documentElement.style.setProperty('--render-height', `${E.H}px`);
+  if (stage) {
+    stage.style.transformOrigin = '0 0';
+    stage.style.transform = `translate(${(E.W - 1920 * scale) / 2}px,${(E.H - 1080 * scale) / 2}px) scale(${scale})`;
+  }
 
   // ---------- easing ----------
   const EASE = {
@@ -135,19 +145,58 @@
 
   // ---------- captions ----------
   E.captions = () => {
+    const mode = renderConfig.captions || 'static';
+    if (mode === 'none') return;
     const box = document.createElement('div');
     box.id = 'cap';
-    box.innerHTML = '<span></span>';
+    const span = document.createElement('span');
+    box.appendChild(span);
     document.getElementById('stage').appendChild(box);
-    const span = box.firstChild;
+    const captions = window.CAPTIONS || [];
+    const words = window.WORDS || [];
+    const phraseWords = new Map();
+    if (mode === 'highlight') {
+      let wordIndex = 0;
+      for (const phrase of captions) {
+        let cursor = 0;
+        const segments = [];
+        while (wordIndex < words.length && cursor < phrase.text.length) {
+          const word = words[wordIndex];
+          const offset = phrase.text.indexOf(word[0], cursor);
+          if (offset < 0) throw new Error('caption word does not match phrase: ' + word[0]);
+          segments.push({ prefix: phrase.text.slice(cursor, offset), word });
+          cursor = offset + word[0].length;
+          wordIndex += 1;
+        }
+        phraseWords.set(phrase, { segments, suffix: phrase.text.slice(cursor) });
+      }
+      if (wordIndex !== words.length) throw new Error('caption phrases do not cover every timed word');
+    }
     let cur = null;
+    let activeWords = [];
     E.hook((t0) => {
       const t = E.T != null ? E.T : t0; // captions always follow the real (audio) clock
-      const c = (window.CAPTIONS || []).find((p) => t >= p.show && t < p.hide);
+      const c = captions.find((p) => t >= p.show && t < p.hide);
       if (c !== cur) {
         cur = c;
-        span.textContent = c ? c.text : '';
+        span.textContent = '';
+        activeWords = [];
+        if (c && mode === 'highlight') {
+          const phrase = phraseWords.get(c);
+          for (const segment of phrase.segments) {
+            span.appendChild(document.createTextNode(segment.prefix));
+            const wordSpan = document.createElement('span');
+            wordSpan.className = 'cap-word';
+            wordSpan.textContent = segment.word[0];
+            span.appendChild(wordSpan);
+            activeWords.push({ element: wordSpan, word: segment.word });
+          }
+          span.appendChild(document.createTextNode(phrase.suffix));
+        } else {
+          span.textContent = c ? c.text : '';
+        }
       }
+      for (const entry of activeWords) entry.element.classList.toggle('spoken', t >= entry.word[1] && t < entry.word[2]);
       const a = c ? Math.min(1, (t - c.show) / 0.12, (c.hide - t) / 0.12) : 0;
       box.style.opacity = a;
     });
@@ -217,7 +266,7 @@
         });
       }
     }
-    for (const fn of hooks) fn(t);
+    return Promise.all(hooks.map((fn) => fn(t)));
   };
   window.render = async (T) => {
     // Optional word-aligned time warp: visuals choreographed to one take play in sync with another.
@@ -233,7 +282,7 @@
       }
     }
     E.T = T;
-    E.render(t);
+    await E.render(t);
     if (E.afterRender) await E.afterRender(t);
     return true;
   };
@@ -241,7 +290,7 @@
     await document.fonts.ready;
     const imgs = [...document.images].map((im) => im.decode().catch(() => {}));
     await Promise.all([...imgs, ...extra]);
-    window.render(Number(new URLSearchParams(location.search).get('t') || 0));
+    await window.render(Number(new URLSearchParams(location.search).get('t') || 0));
     window.READY = true;
   };
 

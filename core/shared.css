@@ -3,7 +3,7 @@
 @import url('../node_modules/@fontsource/hanken-grotesk/600.css');
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+html, body { width: var(--render-width, 1920px); height: var(--render-height, 1080px); overflow: hidden; background: #000; }
 #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; }
 .abs { position: absolute; }
 .fill { position: absolute; inset: 0; }
@@ -15,14 +15,16 @@ img { display: block; }
   position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%);
   max-width: 1560px; z-index: 100; text-align: center; pointer-events: none;
 }
-#cap span {
+#cap > span {
   display: inline-block; max-width: 1560px; padding: var(--cap-pad, 14px 30px 16px);
   font: var(--cap-weight, 500) var(--cap-size, 40px)/1.32 var(--cap-font, 'Segoe UI Variable Text', 'Segoe UI', sans-serif);
   color: var(--cap-ink, #fff); background: var(--cap-bg, rgba(4, 8, 18, 0.74));
   border-radius: var(--cap-radius, 12px); letter-spacing: var(--cap-track, 0);
   text-wrap: balance; -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
-#cap span:empty { display: none; }
+#cap > span:empty { display: none; }
+#cap .cap-word { color: inherit; background: none; }
+#cap .cap-word.spoken { color: var(--cap-highlight, #ffe16b); }
 
 /* ---------- faithful ChatGPT web UI recreation (dark), based on chatgpt.com capture ---------- */
 .gpt { position: absolute; width: 1600px; height: 1000px; background: #000; color: #fff; overflow: hidden;

@@ -6,31 +6,55 @@ python make_take.py <take> <voiceShortName> --script <file> [--rate -3%] [--para
 Requires $env:SPK (Speech / AI Services key). Writes takes/<take>/{narration.wav,timing.json,data.js,meta.json}.
 Script: paragraphs separated by blank lines. --natural rejects takes with unnatural in-sentence pauses.
 """
-import html, json, os, re, subprocess, sys
-import azure.cognitiveservices.speech as sp
+import argparse
+import html, json, os, re, sys
+import io
+import wave
+from fractions import Fraction
+
+from render_options import finite_number, narration_fits
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-name, voice = sys.argv[1], sys.argv[2]
+PRON = {}
+paras = []
+ALIAS_FALLBACK = {}
+MAXGAP = 0.25
+sp = None
+cfg = None
+ssml = ""
 
 
-def arg(flag, default=None, cast=str):
-    return cast(sys.argv[sys.argv.index(flag) + 1]) if flag in sys.argv else default
-
-
-tries = arg("--tries", 8, int)
-rate = arg("--rate")
-REGION = arg("--region", "eastus2")
-out = os.path.join(ROOT, "takes", name)
-os.makedirs(out, exist_ok=True)
-SCRIPT = arg("--script", os.path.join(ROOT, "script.txt"))
-src = open(SCRIPT, encoding="utf-8-sig").read().replace("\r\n", "\n").strip()
-MIN_END = arg("--min-end", 0.0, float)
-MAX_END = arg("--max-end", 1e9, float)
-HOLD = arg("--hold", 3.0, float)
-# pronunciation.json: {"written term": "how to say it"} - speech only; captions keep the written words
-PRON_FILE = arg("--pron", os.path.join(os.path.dirname(os.path.abspath(SCRIPT)), "pronunciation.json"))
-PRON = json.load(open(PRON_FILE, encoding="utf-8")) if os.path.exists(PRON_FILE) else {}
-paras = [x.strip() for x in src.split("\n\n") if x.strip()]
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("name")
+    parser.add_argument("voice")
+    parser.add_argument("--root", default=ROOT)
+    parser.add_argument("--script")
+    parser.add_argument("--locale", default="en-US")
+    parser.add_argument("--rate")
+    parser.add_argument("--region", default="eastus2")
+    parser.add_argument("--tries", type=int, default=8)
+    parser.add_argument("--min-end", type=float, default=0.0)
+    parser.add_argument("--max-end", type=float, default=1e9)
+    parser.add_argument("--hold", type=float, default=3.0)
+    parser.add_argument("--para-break", type=int)
+    parser.add_argument("--natural", action="store_true")
+    parser.add_argument("--max-gap", type=float, default=0.25)
+    parser.add_argument("--pron")
+    values = list(sys.argv[1:] if argv is None else argv)
+    if "--rate" in values:
+        index = values.index("--rate")
+        if index + 1 < len(values):
+            values[index:index + 2] = ["--rate=" + values[index + 1]]
+    args = parser.parse_args(values)
+    narration_fits(0, args.min_end, args.max_end)
+    finite_number(args.hold, "hold")
+    finite_number(args.max_gap, "max-gap")
+    if args.tries <= 0 or (args.para_break is not None and args.para_break < 0):
+        raise ValueError("tries must be positive and para-break nonnegative")
+    if not re.fullmatch(r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*", args.locale):
+        raise ValueError("locale must be a language tag such as en-US")
+    return args
 
 
 def esc(t):
@@ -41,14 +65,12 @@ def esc(t):
     return t
 
 
-PARA_BREAK = int(sys.argv[sys.argv.index("--para-break") + 1]) if "--para-break" in sys.argv else None
-sep = f' <break time="{PARA_BREAK}ms"/> ' if PARA_BREAK else " "
-body = sep.join(esc(x) for x in paras)
-if rate:
-    body = f'<prosody rate="{rate}">{body}</prosody>'
-ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="{voice}">' + body + "</voice></speak>"
-cfg = sp.SpeechConfig(subscription=os.environ["SPK"], region=REGION)
-cfg.set_speech_synthesis_output_format(sp.SpeechSynthesisOutputFormat.Riff48Khz16BitMonoPcm)
+def build_ssml(voice, locale="en-US", rate=None, para_break=None):
+    sep = f' <break time="{para_break}ms"/> ' if para_break else " "
+    body = sep.join(esc(para) for para in paras)
+    if rate:
+        body = f'<prosody rate="{html.escape(rate, quote=True)}">{body}</prosody>'
+    return f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{html.escape(locale, quote=True)}"><voice name="{html.escape(voice, quote=True)}">' + body + "</voice></speak>"
 
 
 def synth():
@@ -66,8 +88,6 @@ def norm(s):
 
 
 ALIAS = {}
-# spoken forms from pronunciation.json; tried only if the written token does not match the word boundaries
-ALIAS_FALLBACK = {k: [norm(w) for w in re.split(r"[\s-]+", v) if norm(w)] for k, v in PRON.items()}
 
 
 def match_target(bn, bi, target):
@@ -111,11 +131,6 @@ def align(words):
     return tok
 
 
-best = None
-NATURAL = "--natural" in sys.argv
-MAXGAP = float(sys.argv[sys.argv.index("--max-gap") + 1]) if "--max-gap" in sys.argv else 0.25
-
-
 def flow_ok(audio, tok):
     """Natural-flow gate: inside every sentence (not after , . or a paragraph end), adjacent words must be
     connected - both the word-boundary gap and any true silence (< -40 dB, 10 ms frames) between them
@@ -143,30 +158,19 @@ def flow_ok(audio, tok):
     return worst[0] <= MAXGAP, worst
 
 
-for i in range(tries):
-    audio, words = synth()
-    wav = os.path.join(out, f"try{i}.wav")
-    open(wav, "wb").write(audio)
-    tok = align(words)
-    end = tok[-1][2]
-    ok, worst = flow_ok(audio, tok) if NATURAL else (True, (0, ""))
-    print(name, "try", i, "narration end", round(end, 2), "| worst in-sentence break", round(worst[0], 2), worst[1], "| flow ok" if ok else "| flow FAIL", flush=True)
-    if not ok:
-        continue
-    if best is None or abs(end - (MIN_END + MAX_END) / 2) < abs(best[1] - (MIN_END + MAX_END) / 2):
-        best = (i, end, tok, words)
-    if MIN_END <= end <= MAX_END:
-        best = (i, end, tok, words)
-        break
-if best is None:
-    raise SystemExit("no take passed the natural-flow gate")
-i, end, tok, words = best
-if end > MAX_END + 1.5:
-    raise SystemExit(f"no take fits: best {end:.2f}")
-os.replace(os.path.join(out, f"try{i}.wav"), os.path.join(out, "narration.wav"))
-for f in os.listdir(out):
-    if f.startswith("try"):
-        os.remove(os.path.join(out, f))
+def choose_take(args):
+    for attempt in range(args.tries):
+        audio, words = synth()
+        tok = align(words)
+        with wave.open(io.BytesIO(audio), "rb") as recording:
+            end = Fraction(recording.getnframes(), recording.getframerate())
+        if not tok or tok[-1][2] > float(end):
+            raise ValueError("word timings exceed the actual narration audio")
+        ok, worst = flow_ok(audio, tok) if args.natural else (True, (0, ""))
+        print(args.name, "try", attempt, "narration end", round(float(end), 2), "| worst in-sentence break", round(worst[0], 2), worst[1], "| flow ok" if ok else "| flow FAIL", flush=True)
+        if ok and narration_fits(end, args.min_end, args.max_end):
+            return audio, float(end), tok, words
+    raise ValueError("no take fits the strict min-end/max-end window and natural-flow gate")
 
 # captions: sentence spans, split at the most balanced point (preferring commas) when > 92 chars
 MAXC = 92
@@ -185,28 +189,72 @@ def split_span(span):
     return split_span(span[:best_[1]]) + split_span(span[best_[1]:])
 
 
-phrases, sent = [], []
-for j, tk in enumerate(tok):
-    sent.append(tk)
-    nxt = tok[j + 1] if j + 1 < len(tok) else None
-    if tk[0].endswith(".") or nxt is None or nxt[3] != tk[3]:
-        for s_ in split_span(sent):
-            phrases.append({"text": " ".join(c[0] for c in s_), "start": s_[0][1], "end": s_[-1][2]})
-        sent = []
-assert " ".join(p_["text"] for p_ in phrases) == " ".join(src.split())
-for j, p_ in enumerate(phrases):
-    nxt = phrases[j + 1]["start"] if j + 1 < len(phrases) else 999
-    p_["show"] = round(max(0.0, p_["start"] - 0.08), 3)
-    p_["hide"] = round(min(nxt - 0.08, p_["end"] + 0.6) if j + 1 < len(phrases) else p_["end"] + 0.3, 3)
+def write_take(args, out, src, end, tok, words, audio):
+    phrases, sent = [], []
+    for j, tk in enumerate(tok):
+        sent.append(tk)
+        nxt = tok[j + 1] if j + 1 < len(tok) else None
+        if tk[0].endswith(".") or nxt is None or nxt[3] != tk[3]:
+            for s_ in split_span(sent):
+                phrases.append({"text": " ".join(c[0] for c in s_), "start": s_[0][1], "end": s_[-1][2]})
+            sent = []
+    assert " ".join(p_["text"] for p_ in phrases) == " ".join(src.split())
+    for j, p_ in enumerate(phrases):
+        nxt = phrases[j + 1]["start"] if j + 1 < len(phrases) else 999
+        p_["show"] = round(max(0.0, p_["start"] - 0.08), 3)
+        p_["hide"] = round(min(nxt - 0.08, p_["end"] + 0.6) if j + 1 < len(phrases) else p_["end"] + 0.3, 3)
 
-dur = round(end + HOLD, 1)
-para_start = [next(t[1] for t in tok if t[3] == k) for k in range(len(paras))]
-WORDS = [[t[0], round(t[1], 3), round(t[2], 3)] for t in tok]
-meta = {"name": name, "voice": voice, "rate": rate or "+0%", "para_break": PARA_BREAK, "narration_end": round(end, 3), "duration": dur, "para_start": [round(x, 3) for x in para_start]}
-json.dump({"voice": voice, "ssml": ssml, "words": words}, open(os.path.join(out, "timing.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-json.dump(meta, open(os.path.join(out, "meta.json"), "w"), indent=1)
-with open(os.path.join(out, "data.js"), "w", encoding="utf-8") as f:
-    f.write("window.WORDS=" + json.dumps(WORDS, ensure_ascii=False) + ";\n")
-    f.write("window.CAPTIONS=" + json.dumps([{k: p_[k] for k in ("text", "show", "hide")} for p_ in phrases], ensure_ascii=False) + ";\n")
-    f.write("window.META=" + json.dumps(meta) + ";\n")
-print("KEPT", json.dumps(meta))
+    finish = (Fraction(str(end)) + Fraction(str(args.hold))) * 10
+    dur = -(-finish.numerator // finish.denominator) / 10
+    para_start = [next(t[1] for t in tok if t[3] == k) for k in range(len(paras))]
+    WORDS = [[t[0], round(t[1], 3), round(t[2], 3)] for t in tok]
+    meta = {"name": args.name, "voice": args.voice, "rate": args.rate or "+0%", "para_break": args.para_break, "locale": args.locale, "hold": args.hold, "narration_end": end, "duration": dur, "para_start": [round(x, 3) for x in para_start]}
+    os.makedirs(out, exist_ok=True)
+    with open(os.path.join(out, "narration.wav"), "wb") as handle:
+        handle.write(audio)
+    with open(os.path.join(out, "timing.json"), "w", encoding="utf-8") as handle:
+        json.dump({"voice": args.voice, "ssml": ssml, "words": words}, handle, ensure_ascii=False, indent=1)
+    with open(os.path.join(out, "meta.json"), "w", encoding="utf-8") as handle:
+        json.dump(meta, handle, indent=1)
+    with open(os.path.join(out, "data.js"), "w", encoding="utf-8") as handle:
+        handle.write("window.WORDS=" + json.dumps(WORDS, ensure_ascii=False) + ";\n")
+        handle.write("window.CAPTIONS=" + json.dumps([{k: p_[k] for k in ("text", "show", "hide")} for p_ in phrases], ensure_ascii=False) + ";\n")
+        handle.write("window.META=" + json.dumps(meta) + ";\n")
+    print("KEPT", json.dumps(meta))
+
+
+def main(argv=None):
+    global PRON, paras, ALIAS_FALLBACK, MAXGAP, sp, cfg, ssml
+    try:
+        args = parse_args(argv)
+        root = os.path.abspath(args.root)
+        out = os.path.abspath(os.path.join(root, "takes", args.name))
+        if os.path.commonpath([os.path.join(root, "takes"), out]) != os.path.join(root, "takes"):
+            raise ValueError("take must remain inside root/takes")
+        script = args.script or os.path.join(root, "script.txt")
+        with open(script, encoding="utf-8-sig") as handle:
+            src = handle.read().replace("\r\n", "\n").strip()
+        if not src:
+            raise ValueError("script must not be empty")
+        pron_file = args.pron or os.path.join(os.path.dirname(os.path.abspath(script)), "pronunciation.json")
+        PRON = {}
+        if os.path.exists(pron_file):
+            with open(pron_file, encoding="utf-8") as handle:
+                PRON = json.load(handle)
+        paras = [para.strip() for para in src.split("\n\n") if para.strip()]
+        ALIAS_FALLBACK = {key: [norm(word) for word in re.split(r"[\s-]+", value) if norm(word)] for key, value in PRON.items()}
+        MAXGAP = args.max_gap
+        ssml = build_ssml(args.voice, args.locale, args.rate, args.para_break)
+        import azure.cognitiveservices.speech as sp
+        cfg = sp.SpeechConfig(subscription=os.environ["SPK"], region=args.region)
+        cfg.set_speech_synthesis_output_format(sp.SpeechSynthesisOutputFormat.Riff48Khz16BitMonoPcm)
+        audio, end, tok, words = choose_take(args)
+        write_take(args, out, src, end, tok, words, audio)
+        return 0
+    except Exception as error:
+        print(f"make_take: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

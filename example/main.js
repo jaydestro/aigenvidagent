@@ -1,4 +1,4 @@
-// Keyframe example: three beats keyed to the spoken words of takes/example.
+// aigenvidagent example: three beats keyed to the spoken words of takes/example.
 import { svgEl, htmlEl, orthoGlobe } from '../core/geo.js';
 
 const W = document.getElementById('world');
@@ -59,7 +59,7 @@ function text(p, cls, html, y, t0, size) {
 // End card: silent hold after narration
 {
   const s = scene('end', END + 0.3, 999);
-  text(s, 'title', 'Keyframe', 440, END + 0.4, 140);
+  text(s, 'title', 'aigenvidagent', 440, END + 0.4, 140);
 }
 
 E.captions();
