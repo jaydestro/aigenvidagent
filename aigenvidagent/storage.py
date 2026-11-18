@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import uuid
 
 from .schema import BriefError, safe_id
@@ -49,7 +50,16 @@ def inside(root, relative):
     unresolved = root / candidate
     current = unresolved
     while current != root:
-        if current.is_symlink() or current.is_junction():
+        is_junction = False
+        if os.name == "nt":
+            try:
+                is_junction = (
+                    current.lstat().st_reparse_tag
+                    == stat.IO_REPARSE_TAG_MOUNT_POINT
+                )
+            except FileNotFoundError:
+                pass
+        if current.is_symlink() or is_junction:
             raise BriefError(
                 "Links/junctions are not allowed in production paths: "
                 f"{relative}"

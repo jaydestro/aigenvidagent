@@ -78,6 +78,8 @@ above. Renderer integration runs when ffmpeg/ffprobe and Chromium are available;
 there is no separate renderer environment flag. Check skipped-test messages:
 a missing prerequisite is not a successful browser/render check.
 [CI](.github/workflows/tests.yml) enables offline integration on all three OSes.
+The Linux job uses Ubuntu 24.04 to match the pinned Playwright version's
+supported browser dependencies; Python 3.11 remains the CI baseline.
 
 ## Safety and Scope
 

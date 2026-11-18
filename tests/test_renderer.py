@@ -64,7 +64,7 @@ class WorkspaceTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix="aigenvidagent test # ")
         self.addCleanup(self.directory.cleanup)
-        self.root = Path(self.directory.name)
+        self.root = Path(self.directory.name).resolve()
         (self.root / "scene").mkdir()
         (self.root / "takes" / "take").mkdir(parents=True)
         (self.root / "scene" / "index.html").write_text("<html></html>")
